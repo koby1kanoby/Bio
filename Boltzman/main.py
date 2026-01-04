@@ -3,143 +3,164 @@ import numpy as np
 import csv
 from urllib.request import urlopen
 
-n_visible = 15 #43
-n_hidden = 6
+# TODO: Increasing the input layer categories from 3 to ten barely helps, same with making the hidden layer larger
+# TODO: A hidden layer of 6 performed better than 4 however
 
-rng = np.random.default_rng(42)
+INPUT_NEURON_COUNT = 12
+OUTPUT_NEURON_COUNT = 3
+VISIBLE_LAYER_SIZE = INPUT_NEURON_COUNT + OUTPUT_NEURON_COUNT
+HIDDEN_LAYER_SIZE = 6
 
-W = rng.normal(0, 0.01, size=(n_visible, n_hidden))
-b = np.zeros(n_visible)
-c = np.zeros(n_hidden)
+TRAINING_DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
 
-
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
-
-
-def sample_hidden(v, W, c):
-    p_h = sigmoid(v @ W + c)
-    h = (np.random.rand(len(p_h)) < p_h).astype(int)
-    return h, p_h
+# Function to use for probabilistic part of neuron activation
+def sigmoid(value, temperature):
+    return 1.0 / (1.0 + np.exp(-value / temperature))
 
 
-def sample_visible(h, W, b):
-    p_v = sigmoid(W @ h + b)
-    v = (np.random.rand(len(p_v)) < p_v).astype(int)
-    return v, p_v
+# Function to calculate energy state for stop condition
+def energy(visible, hidden, weights, v_bias, h_bias):
+    return (
+        -visible @ v_bias
+        -hidden @ h_bias
+        -visible @ weights @ hidden
+    )
 
 
-# def predict_class(v_features, W, b, c, steps=100):
-#     v = np.zeros(15)
-#     v[:12] = v_features  # הצמדת התכונות
-#
-#     for _ in range(steps):
-#         h, _ = sample_hidden(v, W, c)
-#         v_new, _ = sample_visible(h, W, b)
-#         v[12:] = v_new[12:]  # רק נוירוני הזן חופשיים
-#
-#     return np.argmax(v[12:])
-
-def deduce_class(v_features, W, b, c, steps=200):
-    """
-    v_features: length-12 binary vector
-    returns: predicted class index (0,1,2)
-    """
-
-    v = np.zeros(15, dtype=int)
-    v[:12] = v_features  # clamp features
-
-    class_counts = np.zeros(3)
-
-    for _ in range(steps):
-        h, _ = sample_hidden(v, W, c)
-        v_new, _ = sample_visible(h, W, b)
-
-        # re-clamp feature neurons
-        v[:12] = v_features
-
-        # update only class neurons
-        v[12:] = v_new[12:]
-
-        class_counts += v[12:]
-
-    return np.argmax(class_counts)
+# Function to get the activation probabilities of the hidden layer based on weights bias and the visible layer
+def sample_hidden(visible, weights, hidden_biases, temperature=1):
+    field = visible @ weights + hidden_biases
+    probability = sigmoid(field, temperature)
+    hidden = (np.random.rand(len(probability)) < probability).astype(int)
+    return hidden, probability
 
 
-
-def train_rbm(data, W, b, c, lr=0.05, epochs=200):
-    for epoch in range(epochs):
-        for v0 in data:
-            # Positive phase
-            h0, ph0 = sample_hidden(v0, W, c)
-
-            # Negative phase
-            v1, pv1 = sample_visible(h0, W, b)
-            h1, ph1 = sample_hidden(v1, W, c)
-
-            # Updates
-            W += lr * (np.outer(v0, ph0) - np.outer(v1, ph1))
-            b += lr * (v0 - v1)
-            c += lr * (ph0 - ph1)
+# Function to get the activation probabilities of the visible layer based on weights bias and the hidden layer
+def sample_visible(hidden, weights, visible_biases, temperature=1):
+    field = weights @ hidden + visible_biases
+    probability = sigmoid(field, temperature)
+    visible = (np.random.rand(len(probability)) < probability).astype(int)
+    return visible, probability
 
 
-IRIS_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+# Function returns the output neuron activation based on the input data
+# For high values of temperature acts very erratically, so we start fairly low already
+def deduce_class(
+    v_features,
+    weights,
+    visible_biases,
+    hidden_biases,
+    max_iters=100,
+    initial_temperature=2.0,
+    temperature_decrease=0.5, #TODO: Why temp of 1 yield best results
+    flip_threshold=1
+):
+    # Start with a blank visible layer
+    visible = np.random.randint(0, 2, size=15)
+
+    # Load and freeze the input neurons
+    visible[:12] = v_features
+
+    # Initialize the temp and copy of visible layer for flip count
+    temperature = initial_temperature
+    prev_visible = visible.copy()
+
+    index = 0
+    for _ in range(max_iters):
+        index+=1
+        # print(index)
+
+        # Get the new hidden layer
+        hidden, _ = sample_hidden(visible, weights, hidden_biases, temperature)
+
+        # Get the new visible layer
+        v_new, _ = sample_visible(hidden, weights, visible_biases, temperature)
+
+        # Freeze input neurons again
+        visible[:12] = v_features
+
+        # Update only output neurons
+        visible[12:] = v_new[12:]
+
+        # Stop condition: network stabilizes
+        flips = np.sum(visible != prev_visible)
+        # print(flips)
+        if flips < flip_threshold:
+            # print('broke')
+            break
+
+        # Get a new copy
+        prev_visible = visible.copy()
+
+        # Reduce temperature by a constant factor
+        temperature *= temperature_decrease
+
+    return np.argmax(visible[12:])
 
 
-def load_iris():
+# Function to train network on input data
+def train_machine(data, weights, visible_biases, hidden_biases, learning_rate=0.05, learning_iterations=200):
+    for iteration in range(learning_iterations):
+        for initial_visible in data:
+            # Get hidden layer and probabilities
+            initial_hidden, initial_hidden_probabilities = sample_hidden(initial_visible, weights, hidden_biases, 1)
+
+            # Get visible layer and re shuffle hidden layer
+            updated_visible, _ = sample_visible(initial_hidden, weights, visible_biases, 1)
+            _, updated_hidden_probabilities = sample_hidden(updated_visible, weights, hidden_biases, 1)
+
+            # Update all the parameters (learning)
+            weights += learning_rate * (np.outer(initial_visible, initial_hidden_probabilities) -
+                                        np.outer(updated_visible, updated_hidden_probabilities))
+            visible_biases += learning_rate * (initial_visible - updated_visible)
+            hidden_biases += learning_rate * (initial_hidden_probabilities - updated_hidden_probabilities)
+
+
+# Function to load the mnist flower data, returns array of data and their labels
+def load_data():
     data = []
     labels = []
 
-    with urlopen(IRIS_URL) as f:
-        reader = csv.reader(line.decode("utf-8") for line in f)
-        for row in reader:
-            if len(row) != 5:
-                continue
-            features = list(map(float, row[:4]))
-            label = row[4]
-            data.append(features)
-            labels.append(label)
+    reader = csv.reader(line.decode("utf-8") for line in urlopen(TRAINING_DATA_URL))
+    for row in reader:
+        # Special condition for useless input rows
+        if len(row) != 5:
+            continue
+        features = list(map(float, row[:4]))
+        label = row[4]
+        data.append(features)
+        labels.append(label)
 
     return np.array(data), labels
 
 
-def compute_bins(data, n_bins=3):
-    """
-    data: shape (N, 4)
-    returns: list of 4 arrays, each containing bin edges
-    """
-    bins = []
-    for feature_idx in range(data.shape[1]):
-        feature = data[:, feature_idx]
-        edges = np.quantile(feature, np.linspace(0, 1, n_bins + 1))
-        bins.append(edges)
-    return bins
+# Seperate all the values into the category appropriate for them
+def get_feature_categories(data, cat_count):
+    example_count, feature_count = data.shape
+    data_categories = np.zeros((example_count, feature_count * cat_count), dtype=int)
+    category_basket = []
+
+    # For each feature gather the data from all examples to make the appropriate categories
+    for feat_num in range(feature_count):
+        feature = data[:, feat_num]
+
+        # Compute baskets for each value
+        edges = np.quantile(feature, np.linspace(0, 1, cat_count + 1))
+        category_basket.append(edges)
+
+        # Assign all samples for this feature at once
+        baskets_indices = np.searchsorted(edges, feature, side="right") - 1
+        baskets_indices = np.clip(baskets_indices, 0, cat_count - 1)
+
+        # Create the actual categories
+        for i in range(example_count):
+            neuron_index = feat_num * cat_count + baskets_indices[i]
+            data_categories[i, neuron_index] = 1
+
+    return data_categories
 
 
-def discretize_one_hot(data, bins):
-    """
-    data: (N, 4)
-    bins: output of compute_bins
-    returns: (N, 12) binary matrix
-    """
-    N = data.shape[0]
-    one_hot = np.zeros((N, 12), dtype=int)
-
-    for i in range(N):
-        for f in range(4):
-            value = data[i, f]
-            edges = bins[f]
-
-            # find bin index
-            bin_idx = np.searchsorted(edges, value, side="right") - 1
-            bin_idx = min(bin_idx, 2)  # safety clamp
-
-            neuron_idx = f * 3 + bin_idx
-            one_hot[i, neuron_idx] = 1
-
-    return one_hot
-
-
+# Return the labels as int
 def encode_labels(labels):
     label_map = {
         "Iris-setosa": 0,
@@ -153,21 +174,23 @@ def encode_labels(labels):
 
     return Y
 
-def print_accuracy(visible_data):
+
+# Print the overall accuracy of the machine from the entire dataset
+def print_accuracy(visible_data, weights, visible_biases, hidden_biases):
     correct = 0
     total = visible_data.shape[0]
 
-    for idx in range(total):
-        sample = visible_data[idx]
+    # Loop over all data points and compare the predicted class to the true label
+    for index in range(total):
+        sample = visible_data[index]
 
         true_class = np.argmax(sample[12:])
 
         predicted_class = deduce_class(
-            v_features=sample[:12],
-            W=W,
-            b=b,
-            c=c,
-            steps=300
+            sample[:12],
+            weights,
+            visible_biases,
+            hidden_biases,
         )
 
         if predicted_class == true_class:
@@ -177,57 +200,58 @@ def print_accuracy(visible_data):
     print(f"Accuracy: {accuracy:.3f}")
 
 
+# Sample random example
+def sample_random(visible_data, weights, visible_biases, hidden_biases):
+    index = np.random.randint(0, visible_data.shape[0])
+    sample = visible_data[index]
+    true_class = np.argmax(sample[12:])
+    predicted_class = deduce_class(
+            sample[:12],
+            weights,
+            visible_biases,
+            hidden_biases,
+        )
+
+    print(f"For random example in index {index} predicted: {predicted_class} true class is {true_class}")
+
+
+# Main function to run the machine - including training
 def main():
+    # Start with random weights matrix of the dimensions of the visible layer X hidden layer
+    weights = np.random.default_rng(24).normal(0, 1, size=(VISIBLE_LAYER_SIZE, HIDDEN_LAYER_SIZE))
+
+    # Start with empty biases
+    visible_biases = np.zeros(VISIBLE_LAYER_SIZE)
+    hidden_biases = np.zeros(HIDDEN_LAYER_SIZE)
+
     # Load data
-    X_raw, labels = load_iris()
+    raw_data, labels = load_data()
 
-    # Discretize
-    bins = compute_bins(X_raw, n_bins=3)
-    X_features = discretize_one_hot(X_raw, bins)   # (150, 40)
-    Y_classes = encode_labels(labels)               # (150, 3)
+    # Transform the data into discreet values and in labels
+    feature_data = get_feature_categories(raw_data, 3)
+    encoded_labels = encode_labels(labels)
 
-    # Full visible layer
-    visible_data = np.hstack([X_features, Y_classes])  # (150, 43)
+    # Compile all the data together
+    visible_data = np.hstack([feature_data, encoded_labels])
 
-    # print("Visible shape:", visible_data.shape)
-    # print("Example sample:", visible_data[0])
+    # Pick a random example, run deduction and get the overall accuracy
+    sample_random(visible_data, weights, visible_biases, hidden_biases)
+    print_accuracy(visible_data, weights, visible_biases, hidden_biases)
 
-    # visible_data shape: (150, 15)
-    # idx = np.random.randint(0, visible_data.shape[0])
-    #
-    # sample = visible_data[idx]
-    #
-    # true_class = np.argmax(sample[12:])
-    #
-    # predicted_class = deduce_class(
-    #     v_features=sample[:12],
-    #     W=W,
-    #     b=b,
-    #     c=c,
-    #     steps=300
-    # )
-    #
-    # print("Sample index:", idx)
-    # print("True class:", true_class)
-    # print("Predicted class:", predicted_class)
-
-    print_accuracy(visible_data)
-
-    train_rbm(
-        data=visible_data,
-        W=W,
-        b=b,
-        c=c,
-        lr=0.05,
-        epochs=1000
+    # Run learning algorithm to improve deduction
+    train_machine(
+        visible_data,
+        weights,
+        visible_biases,
+        hidden_biases,
+        0.05,
+        1000
     )
 
-    print_accuracy(visible_data)
+    # Pick a random example, run deduction and get the overall accuracy
+    sample_random(visible_data, weights, visible_biases, hidden_biases)
+    print_accuracy(visible_data, weights, visible_biases, hidden_biases)
 
 
 if __name__ == "__main__":
     main()
-
-    # TODO: Replace all the 3 and 12 with 10 and 40 for more granular classification
-    # ALso replace the 2 with a 9, meant to access the highest index we can before overlapping
-
