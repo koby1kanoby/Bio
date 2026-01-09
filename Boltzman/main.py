@@ -13,6 +13,7 @@ HIDDEN_LAYER_SIZE = 6
 
 TRAINING_DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
 
+
 # Function to use for probabilistic part of neuron activation
 def sigmoid(value, temperature):
     return 1.0 / (1.0 + np.exp(-value / temperature))
@@ -52,7 +53,7 @@ def deduce_class(
     hidden_biases,
     max_iters=100,
     initial_temperature=2.0,
-    temperature_decrease=0.5, #TODO: Why temp of 1 yield best results
+    temperature_decrease=0.5,
     flip_threshold=1
 ):
     # Start with a blank visible layer
@@ -67,7 +68,7 @@ def deduce_class(
 
     index = 0
     for _ in range(max_iters):
-        index+=1
+        index += 1
         # print(index)
 
         # Get the new hidden layer
@@ -168,11 +169,11 @@ def encode_labels(labels):
         "Iris-virginica": 2
     }
 
-    Y = np.zeros((len(labels), 3), dtype=int)
+    labels = np.zeros((len(labels), 3), dtype=int)
     for i, lbl in enumerate(labels):
-        Y[i, label_map[lbl]] = 1
+        labels[i, label_map[lbl]] = 1
 
-    return Y
+    return labels
 
 
 # Print the overall accuracy of the machine from the entire dataset
