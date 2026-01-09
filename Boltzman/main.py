@@ -169,11 +169,11 @@ def encode_labels(labels):
         "Iris-virginica": 2
     }
 
-    labels = np.zeros((len(labels), 3), dtype=int)
+    label_output = np.zeros((len(labels), 3), dtype=int)
     for i, lbl in enumerate(labels):
-        labels[i, label_map[lbl]] = 1
+        label_output[i, label_map[lbl]] = 1
 
-    return labels
+    return label_output
 
 
 # Print the overall accuracy of the machine from the entire dataset
