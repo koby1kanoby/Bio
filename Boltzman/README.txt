@@ -1,0 +1,1 @@
+To run the code install the libs and run main.py to run the deduction and learning functions for the Boltzmann machine
