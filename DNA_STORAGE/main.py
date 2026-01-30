@@ -255,6 +255,9 @@ def main():
 
     print('decoding done')
 
+    print('Found data:')
+    print(recovered)
+
     if recovered == bit_data:
         print('Recovered the original data')
     else:
