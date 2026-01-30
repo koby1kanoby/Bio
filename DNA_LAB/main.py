@@ -84,7 +84,6 @@ class DNAstrand:
 
 # Class to simulate procedures of a virtual DNA lab
 class VirtualLab:
-
     # Amplify, emulating PCR, including small probability of failure
     @staticmethod
     def amplify(
