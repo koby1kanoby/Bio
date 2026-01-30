@@ -265,76 +265,81 @@ def generate_variable_codes(n, length=6, seed=24):
 # Code to simulate running a solution to 3-SAT using the virtual lab
 def main():
     # The expression itself
-    CNF = [['a', '-a', 'b'], ['a', 'b', 'c'], ['a', '-b', 'c'], ['-a', '-c', 'b']]
-    arguments = []
+    CNF_list = [[['a', '-a', 'b'], ['a', 'b', 'c'], ['a', '-b', 'c'], ['-a', '-c', 'b']],
+                [['a', 'a', 'b']],
+                [['a', 'a', 'a'], ['-a', '-a', '-a']]]
+    for cnf_index, CNF in enumerate(CNF_list):
+        arguments = []
 
-    # Count all the unique arguments
-    for expression in CNF:
-        for argument in expression:
-            if argument.replace('-', '') not in arguments:
-                arguments.append(argument.replace('-', ''))
+        # Count all the unique arguments
+        for expression in CNF:
+            for argument in expression:
+                if argument.replace('-', '') not in arguments:
+                    arguments.append(argument.replace('-', ''))
 
-    codes = generate_variable_codes((len(arguments) * 3 + 1), 3)
+        codes = generate_variable_codes((len(arguments) * 3 + 1), 3)
 
-    arg_count = len(arguments)
-    argument_dict = {}
-    genetic_code_dict = {}
+        arg_count = len(arguments)
+        argument_dict = {}
+        genetic_code_dict = {}
 
-    index = 0
+        index = 0
 
-    # Create dict to translate argument to genetic sequence and vice-versa to compare in the expression checking loop
-    for index, argument in enumerate(arguments):
-        arg_code = codes[index]
-        complement_arg_code = codes[index+arg_count]
-        middle_path_arg_code = codes[index+arg_count*2]
+        # Create dict to translate argument to genetic sequence and vice-versa to compare in the expression checking loop
+        for index, argument in enumerate(arguments):
+            arg_code = codes[index]
+            complement_arg_code = codes[index+arg_count]
+            middle_path_arg_code = codes[index+arg_count*2]
 
-        argument_dict[argument] = arg_code
-        argument_dict['-'+argument] = complement_arg_code
-        argument_dict['set_'+argument] = middle_path_arg_code
+            argument_dict[argument] = arg_code
+            argument_dict['-'+argument] = complement_arg_code
+            argument_dict['set_'+argument] = middle_path_arg_code
 
-        genetic_code_dict[arg_code] = argument
-        genetic_code_dict[complement_arg_code] = '-'+argument
-        genetic_code_dict[middle_path_arg_code] = 'set_'+argument
+            genetic_code_dict[arg_code] = argument
+            genetic_code_dict[complement_arg_code] = '-'+argument
+            genetic_code_dict[middle_path_arg_code] = 'set_'+argument
 
-    argument_dict['set_last'] = codes[index+arg_count*2+1]
-    genetic_code_dict[codes[index+arg_count*2+1]] = 'set_last'
+        argument_dict['set_last'] = codes[index+arg_count*2+1]
+        genetic_code_dict[codes[index+arg_count*2+1]] = 'set_last'
 
-    print(argument_dict)
-    print(genetic_code_dict)
+        print(argument_dict)
+        print(genetic_code_dict)
 
-    dna_strands = []
+        dna_strands = []
 
-    # Generate all possible paths, 2^n possibilities
-    for mask in range(2 ** arg_count):
-        result = []
-        for i in range(arg_count):
-            result.append(argument_dict['set_'+arguments[i]])
-            if mask & (1 << (arg_count - i - 1)):
-                result.append(argument_dict['-'+arguments[i]])
-            else:
-                result.append(argument_dict[arguments[i]])
+        # Generate all possible paths, 2^n possibilities
+        for mask in range(2 ** arg_count):
+            result = []
+            for i in range(arg_count):
+                result.append(argument_dict['set_'+arguments[i]])
+                if mask & (1 << (arg_count - i - 1)):
+                    result.append(argument_dict['-'+arguments[i]])
+                else:
+                    result.append(argument_dict[arguments[i]])
 
-        result.append(argument_dict['set_last'])
-        dna_strands.append(DNAstrand("".join(result)))
+            result.append(argument_dict['set_last'])
+            dna_strands.append(DNAstrand("".join(result)))
 
-    # The algorithm given in the text book. for each expression check that all the generated codes satisfy it
-    for expression in CNF:
-        bank_tube = []
-        for argument in expression:
-            containing, non_containing = VirtualLab.extract(dna_strands, argument_dict[argument])
-            bank_tube.extend(containing)
-        dna_strands = bank_tube
+        # The algorithm given in the text book. for each expression check that all the generated codes satisfy it
+        for expression in CNF:
+            bank_tube = []
+            for argument in expression:
+                containing, non_containing = VirtualLab.extract(dna_strands, argument_dict[argument])
+                bank_tube.extend(containing)
+            dna_strands = bank_tube
 
-    dna_strands = VirtualLab.amplify(dna_strands, argument_dict['set_'+arguments[0]], argument_dict['set_last'])
+        dna_strands = VirtualLab.amplify(dna_strands, argument_dict['set_'+arguments[0]], argument_dict['set_last'])
 
-    if len(dna_strands) > 0:
-        print('solutions found')
-    print(dna_strands)
+        if len(dna_strands) > 0:
+            print('solutions found for problem number ' + str(cnf_index))
+        else:
+            print('no solutions found for problem number ' + str(cnf_index))
+        # print(dna_strands)
 
-    # Checkign double helix working correctly
-    first = DNAstrand('AAATTGG')
-    second = DNAstrand('TTAACC')
-    print(first.can_form_double_helix(second))
+    # # Checkign double helix working correctly
+    # first = DNAstrand('AAATTGG')
+    # second = DNAstrand('TTAACC')
+    # print(first.can_form_double_helix(second))
 
 
 if __name__ == "__main__":
