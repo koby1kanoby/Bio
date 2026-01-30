@@ -242,14 +242,6 @@ def decode(sequences):
     # Remove empty segments
     deciphered_segments = [item for item in deciphered_segments if item != '']
 
-    seed_bits_list = []
-
-    # Translate back to bit data from words
-    for seed in list(decoded_seeds):
-        seed_bits_list.append(words_to_bits(seed))
-
-    seed_bits_list.sort()
-
     return ''.join(deciphered_segments)
 
 
