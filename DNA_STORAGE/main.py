@@ -1,18 +1,10 @@
-# Simulation of storing a bit sequence in DNA using a 6-letter alphabet
-# Assumptions (since Table 2 is not explicitly given):
-# Alphabet: {A, T, G, C, R, Y}
-# R -> {A,G} with equal probability, Y -> {C,T} with equal probability
-# Each word is length 3 over this alphabet -> encodes 6 bits (2 bits per letter)
-# Mapping table is explicitly defined below
 
 import random
 from collections import defaultdict, Counter
-import difflib
 
 WORD_LEN = 2          # letters per word
 BITS_PER_WORD = 5
 
-# choose d1, d2
 # d1, d2 = 2, 3
 d1, d2 = 1, 2
 
@@ -72,7 +64,7 @@ def expand_word_to_dna(word, error_chance=0.99):
     return dna
 
 
-# TODO: Provide unique barcodes somehow
+# Provide unique barcode which also contains metadata of segment count (ending in A or T)
 def random_barcode(exclusion_list, is_d1=True, length=10):
     while True:
         barcode = ''.join(random.choice('ATGC') for _ in range(length-1)) + ('A' if is_d1 else 'T')
@@ -165,7 +157,6 @@ def encode(bits):
         # Get words in letter form from XOR of bits
         words_of_xor_bits = bits_to_words(xor_of_segments)
 
-
         # Generate many sequences at correct distribution
         for drop_num in range(0, DROPLETS_PER_SEED):
             translated_sub_segments = expand_word_to_dna(words_of_xor_bits)
@@ -211,35 +202,29 @@ def decode(sequences):
     # Sort by the last character so that the ones which represent a single segment come first
     barcodes.sort(key=lambda x: x[-1])
 
+    # Keep list of deciphered segments in order of indexes
     deciphered_segments = [''] * SEGMENT_COUNT
-
-    segments = []
 
     # Decipher original data from decoded paylaods
     for barcode in barcodes:
         decoded_droplet = decoded_droplets[barcode]
         seed = decoded_seeds[barcode]
         seed_bits = words_to_bits(seed)
+
         # For those which represent a single segment
         if barcode[-1] == 'A':
             segment_numbers = get_values_from_seed(seed_bits, d1, int(SEGMENT_COUNT))
 
-            for seg in segment_numbers:
-                if seg not in segments:
-                    segments.append(seg)
-
             deciphered_segments[segment_numbers[0]] = words_to_bits(decoded_droplet)
+
         # Barcode is for multiple segments
         else:
             segment_numbers = get_values_from_seed(seed_bits, d2, int(SEGMENT_COUNT))
 
-            for seg in segment_numbers:
-                if seg not in segments:
-                    segments.append(seg)
-
             first_segment = segment_numbers[0]
             second_segment = segment_numbers[1]
 
+            # Use XOR logic to get the remaining segments from known ones
             if deciphered_segments[first_segment] != '' and deciphered_segments[second_segment] != '':
                 continue
             elif deciphered_segments[first_segment] != '' and deciphered_segments[second_segment] == '':
@@ -252,18 +237,14 @@ def decode(sequences):
                 continue
                 #TODO: Make another go at these
 
-            if missing_index == 34 or missing_index == 174:
-                print(missing_index)
-                print(known_segment)
-                print(words_to_bits(decoded_droplet))
-                print(mod_two_from_segments([known_segment, words_to_bits(decoded_droplet)]))
-
             deciphered_segments[missing_index] = mod_two_from_segments([known_segment, words_to_bits(decoded_droplet)])
 
+    # Remove empty segments
     deciphered_segments = [item for item in deciphered_segments if item != '']
 
     seed_bits_list = []
 
+    # Translate back to bit data from words
     for seed in list(decoded_seeds):
         seed_bits_list.append(words_to_bits(seed))
 
