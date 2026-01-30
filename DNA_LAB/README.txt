@@ -1,0 +1,1 @@
+To run the code install the libs and run main.py to run 3-SAT simulation, change the input array of boolean expressions to solve problem in a general sense
